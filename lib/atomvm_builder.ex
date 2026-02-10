@@ -160,6 +160,49 @@ defmodule ExAtomVM.AtomVMBuilder do
     end
   end
 
+  @doc """
+  Fetch a pull request by number and check out the PR branch.
+
+  Fetches `refs/pull/<number>/head` into a local branch `pr-<number>` and checks it out.
+  """
+  def fetch_pr(repo_path, pr_number) do
+    branch = "pr-#{pr_number}"
+
+    IO.puts("Fetching PR ##{pr_number}...")
+
+    {output, status} =
+      System.cmd("git", ["fetch", "origin", "pull/#{pr_number}/head"],
+        cd: repo_path,
+        stderr_to_stdout: true
+      )
+
+    case status do
+      0 ->
+        IO.puts(output)
+
+        {output, status} =
+          System.cmd("git", ["checkout", "-B", branch, "FETCH_HEAD"],
+            cd: repo_path,
+            stderr_to_stdout: true
+          )
+
+        case status do
+          0 ->
+            IO.puts(output)
+            IO.puts("Checked out PR ##{pr_number}")
+            repo_path
+
+          _ ->
+            IO.puts("Error checking out PR branch:\n#{output}")
+            exit({:shutdown, 1})
+        end
+
+      _ ->
+        IO.puts("Error fetching PR ##{pr_number}:\n#{output}")
+        exit({:shutdown, 1})
+    end
+  end
+
   # --- Private git helpers ---
 
   defp clone_repo(url, repo_path, cache_dir, ref) do

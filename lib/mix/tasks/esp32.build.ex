@@ -26,6 +26,7 @@ defmodule Mix.Tasks.Atomvm.Esp32.Build do
     * `--atomvm-path` - Path to local AtomVM repository (optional, overrides URL if both provided)
     * `--atomvm-url` - Git URL to clone AtomVM from (optional, defaults to AtomVM/AtomVM main branch)
     * `--ref` - Git reference to checkout - branch, tag, or commit SHA (default: main)
+    * `--pr` - Pull request number to fetch and build (fetches refs/pull/<N>/head)
     * `--chip` - Target chip (default: esp32, options: esp32, esp32s2, esp32s3, esp32c2, esp32c3, esp32c6, esp32h2, esp32p4)
     * `--idf-path` - Path to idf.py executable (default: idf.py)
     * `--use-docker` - Use ESP-IDF Docker image instead of local installation
@@ -59,6 +60,12 @@ defmodule Mix.Tasks.Atomvm.Esp32.Build do
       # Build with custom MbedTLS
       mix atomvm.esp32.build --atomvm-path /path/to/AtomVM --mbedtls-prefix /usr/local/opt/mbedtls@3
 
+      # Build from a pull request
+      mix atomvm.esp32.build --pr 1234
+
+      # Build from a PR on a fork
+      mix atomvm.esp32.build --atomvm-url https://github.com/user/AtomVM --pr 42 --chip esp32s3
+
   """
   use Mix.Task
 
@@ -78,6 +85,7 @@ defmodule Mix.Tasks.Atomvm.Esp32.Build do
           atomvm_path: :string,
           atomvm_url: :string,
           ref: :string,
+          pr: :integer,
           chip: :string,
           idf_path: :string,
           use_docker: :boolean,
@@ -90,6 +98,7 @@ defmodule Mix.Tasks.Atomvm.Esp32.Build do
     atomvm_path = Keyword.get(opts, :atomvm_path)
     atomvm_url = Keyword.get(opts, :atomvm_url, @default_atomvm_url)
     ref = Keyword.get(opts, :ref, @default_ref)
+    pr = Keyword.get(opts, :pr)
     chip = Keyword.get(opts, :chip, @default_chip)
     idf_path = Keyword.get(opts, :idf_path, @default_idf_path)
     use_docker = Keyword.get(opts, :use_docker, false)
@@ -104,10 +113,20 @@ defmodule Mix.Tasks.Atomvm.Esp32.Build do
     atomvm_path =
       cond do
         atomvm_path ->
+          if pr do
+            ExAtomVM.AtomVMBuilder.fetch_pr(atomvm_path, pr)
+          end
+
           atomvm_path
 
-        atomvm_url ->
-          ExAtomVM.AtomVMBuilder.clone_or_update_repo(atomvm_url, ref)
+        true ->
+          repo_path = ExAtomVM.AtomVMBuilder.clone_or_update_repo(atomvm_url, ref)
+
+          if pr do
+            ExAtomVM.AtomVMBuilder.fetch_pr(repo_path, pr)
+          end
+
+          repo_path
       end
 
     # Verify AtomVM path exists
